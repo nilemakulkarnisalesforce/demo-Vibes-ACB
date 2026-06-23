@@ -1,0 +1,74 @@
+{
+  "basicConstraints": 36,
+  "criticalExtensionOIDs": [
+    "felis",
+    "risus"
+  ],
+  "extendedKeyUsage": [
+    "elit",
+    "faucibus",
+    "consectetur"
+  ],
+  "extensions": [
+    {
+      "criticality": false,
+      "oid": "erat"
+    }
+  ],
+  "issuerAlternativeNames": [
+    {
+      "name": "Alpha",
+      "type": 72
+    }
+  ],
+  "issuerDN": {
+    "commonName": "Nunc",
+    "name": "Curt"
+  },
+  "issuerUniqueID": [
+    true,
+    true,
+    true
+  ],
+  "issuerX500Principal": {
+    "name": "Albertine"
+  },
+  "keyUsage": [
+    true,
+    false
+  ],
+  "name": "Alica",
+  "nonCriticalExtensionOIDs": [
+    "sit",
+    "venenatis"
+  ],
+  "notAfter": "2021-10-26",
+  "notBefore": "2025-12-24",
+  "publicKey": {
+    "algorithm": "venenatis",
+    "modulus": 22,
+    "params": 5,
+    "publicKey": "consectetur"
+  },
+  "serialNumber": 32,
+  "serialNumberObject": {
+    "serialNumber": 24
+  },
+  "sigAlgName": "Aliquam",
+  "sigAlgOID": "sed",
+  "subjectAlternativeNames": [
+    {
+      "name": "Alysha",
+      "type": 27
+    }
+  ],
+  "subjectDN": {
+    "commonName": "molestie",
+    "name": "Alyson"
+  },
+  "subjectX500Principal": {
+    "name": "Adan"
+  },
+  "type": "libero",
+  "version": 70
+}

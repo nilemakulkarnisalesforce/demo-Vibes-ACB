@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core
+            http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http
+            http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/ee/core
+            http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/tls
+            http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd">
+
+    <!-- ================================================================
+         Global Configuration
+    ================================================================ -->
+
+    <configuration-properties
+        file="config.yaml"
+        doc:name="Configuration Properties"
+        doc:description="Loads HTTP host, port and TLS keystore values from config.yaml" />
+
+    <http:listener-config
+        name="httpListenerConfig"
+        doc:name="HTTP Listener Config"
+        doc:description="HTTPS Listener bound to 0.0.0.0:8081 serving all three resource API endpoints">
+        <http:listener-connection
+            host="${http.host}"
+            port="${http.port}"
+            protocol="HTTPS">
+            <tls:context
+                doc:name="Local TLS Context"
+                doc:description="Self-signed TLS context for local HTTPS development on localhost">
+                <tls:key-store
+                    path="${tls.keystorePath}"
+                    password="${tls.keystorePassword}"
+                    keyPassword="${tls.keyPassword}" />
+            </tls:context>
+        </http:listener-connection>
+    </http:listener-config>
+
+    <!-- ================================================================
+         Flow 1: GET /resources
+         Returns the full hardcoded JSON array of all resource objects.
+    ================================================================ -->
+
+    <flow name="get-resources-flow"
+          doc:name="get-resources-flow"
+          doc:description="Handles GET /resources and returns the complete hardcoded JSON array of resources">
+
+        <http:listener
+            config-ref="httpListenerConfig"
+            path="/resources"
+            allowedMethods="GET"
+            doc:name="GET /resources"
+            doc:description="Listens for GET requests on /resources and returns all available resource records">
+            <http:response statusCode="200" />
+        </http:listener>
+
+        <ee:transform
+            doc:name="Return all resources"
+            doc:description="Produces the hardcoded JSON array of resource objects as the response payload">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[
+    { id: "1", name: "Resource Alpha", "type": "compute",  status: "active"   },
+    { id: "2", name: "Resource Beta",  "type": "storage",  status: "inactive" },
+    { id: "3", name: "Resource Gamma", "type": "network",  status: "active"   }
+]]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger
+            level="INFO"
+            message="#['GET /resources — returned ' ++ (sizeOf(payload as Array&lt;Any&gt;) as String) ++ ' items']"
+            doc:name="Log response"
+            doc:description="Logs the number of resource items returned in the GET /resources response" />
+
+    </flow>
+
+    <!-- ================================================================
+         Flow 2: GET /resources/{id}
+         Filters the hardcoded array and returns a single object matching
+         the URI parameter {id}. Returns HTTP 404 when no match is found.
+    ================================================================ -->
+
+    <flow name="get-resource-by-id-flow"
+          doc:name="get-resource-by-id-flow"
+          doc:description="Handles GET /resources/{id}, filters the hardcoded array by ID, and returns the matched resource or 404">
+
+        <http:listener
+            config-ref="httpListenerConfig"
+            path="/resources/{id}"
+            allowedMethods="GET"
+            doc:name="GET /resources/{id}"
+            doc:description="Listens for GET requests on /resources/{id} to retrieve a specific resource by its ID">
+            <http:response statusCode="#[vars.httpStatus default 200]" />
+        </http:listener>
+
+        <ee:transform
+            doc:name="Filter resources by ID"
+            doc:description="Searches the hardcoded resources array for an entry whose id matches the incoming URI parameter">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var allResources = [
+    { id: "1", name: "Resource Alpha", "type": "compute",  status: "active"   },
+    { id: "2", name: "Resource Beta",  "type": "storage",  status: "inactive" },
+    { id: "3", name: "Resource Gamma", "type": "network",  status: "active"   }
+]
+---
+allResources filter ($.id == attributes.uriParams.id)]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <choice
+            doc:name="Resource found?"
+            doc:description="Routes the flow based on whether the filter returned a matching resource">
+
+            <when
+                expression="#[!isEmpty(payload)]"
+                doc:name="Match found"
+                doc:description="At least one resource matched the requested ID — return it with HTTP 200">
+                <set-variable
+                    variableName="httpStatus"
+                    value="200"
+                    doc:name="Set HTTP 200"
+                    doc:description="Sets the HTTP response status code to 200 OK for a successful resource lookup" />
+                <ee:transform
+                    doc:name="Extract matched resource"
+                    doc:description="Extracts the first matched resource object from the filtered array for the response payload">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload[0]]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+
+            <otherwise
+                doc:name="No match"
+                doc:description="No resource matched the requested ID — return a structured JSON error with HTTP 404">
+                <set-variable
+                    variableName="httpStatus"
+                    value="404"
+                    doc:name="Set HTTP 404"
+                    doc:description="Sets the HTTP response status code to 404 Not Found when the resource ID does not exist" />
+                <ee:transform
+                    doc:name="Build 404 error body"
+                    doc:description="Constructs a JSON error payload indicating the requested resource was not found">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "Resource not found",
+    id:    attributes.uriParams.id
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+
+        </choice>
+
+        <logger
+            level="INFO"
+            message="#['GET /resources/' ++ (attributes.uriParams.id default 'unknown') ++ ' — HTTP ' ++ (vars.httpStatus default '200')]"
+            doc:name="Log lookup result"
+            doc:description="Logs the resource ID that was looked up and the HTTP status code of the response" />
+
+    </flow>
+
+    <!-- ================================================================
+         Flow 3: POST /resources
+         Accepts a JSON payload and returns a 201 Created success message.
+    ================================================================ -->
+
+    <flow name="post-resource-flow"
+          doc:name="post-resource-flow"
+          doc:description="Handles POST /resources, accepts a JSON body, and responds with a 201 Created success message">
+
+        <http:listener
+            config-ref="httpListenerConfig"
+            path="/resources"
+            allowedMethods="POST"
+            doc:name="POST /resources"
+            doc:description="Listens for POST requests on /resources to accept a new resource payload">
+            <http:response statusCode="201" />
+        </http:listener>
+
+        <ee:transform
+            doc:name="Build 201 success response"
+            doc:description="Returns a structured JSON success message with status 201 and an echo of the received payload">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    message:         "Resource created successfully",
+    status:          201,
+    receivedPayload: payload
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger
+            level="INFO"
+            message="POST /resources — resource creation request processed with HTTP 201 Created"
+            doc:name="Log creation"
+            doc:description="Logs successful processing of the POST /resources request with the 201 Created status" />
+
+    </flow>
+
+</mule>
